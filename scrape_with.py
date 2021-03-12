@@ -5,8 +5,6 @@ import json
 
 
 class scrape_with:
-    port = ""
-    url = ""
     headers = {
         "Accept-Encoding": "gzip, deflate, br",
         "Content-Type": "application/json",
@@ -829,12 +827,71 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                     del p["checksum"]
                     del p["scene_count"]
                     self.info("updating performer "+p["name"])
-                    self.debug("===name: "+p["name"]+ " url: "+p["url"]+" gender "+p["gender"])
+                    self.debug("===name: "+str(p["name"])+ " url: "+str(p["url"])+" gender "+str(p["gender"]))
                     u=self.performer_update(p)
                     if u is not None:
                         self.info("update succesful!!")
                         print(u)
-
+    def run_scraper_performers(self,scraper):
+        performers=self.allPerformers()
+        index=0
+        for p in performers:
+            index=index+1
+            found = False
+            self.progress(index/len(performers))
+            scraped_list = self.scrape_performer_list(scraper, p["name"].lower())
+            if scraped_list is not None:
+                for s in scraped_list:
+                    if (s["name"]).lower() == (p["name"]).lower() and not found:
+                        sp = self.scrape_performer(scraper, s)
+                        if sp is not None:
+                            if (sp["name"]).lower() == (p["name"]).lower():
+                                found = True
+                                self.info("Found performer " + sp["name"] + " with scraper: " + scraper)
+                                if sp["name"] is not None:
+                                    p["name"] = sp["name"]
+                                if sp["url"] is not None:
+                                    p["url"] = sp["url"]
+                                if sp["gender"] is not None:
+                                    p["gender"] = sp["gender"].upper()
+                                if sp["twitter"] is not None:
+                                    p["twitter"] = sp["twitter"]
+                                if sp["instagram"] is not None:
+                                    p["instagram"] = sp["instagram"]
+                                if sp["birthdate"] is not None:
+                                    p["birthdate"] = sp["birthdate"]
+                                if sp["ethnicity"] is not None:
+                                    p["ethnicity"] = sp["ethnicity"]
+                                if sp["country"] is not None:
+                                    p["country"] = sp["country"]
+                                if sp["eye_color"] is not None:
+                                    p["eye_color"] = sp["eye_color"]
+                                if sp["height"] is not None:
+                                    p["height"] = sp["height"]
+                                if sp["measurements"] is not None:
+                                    p["measurements"] = sp["measurements"]
+                                if sp["fake_tits"] is not None:
+                                    p["fake_tits"] = sp["fake_tits"]
+                                if sp["career_length"] is not None:
+                                    p["career_length"] = sp["career_length"]
+                                if sp["tattoos"] is not None:
+                                    p["tattoos"] = sp["tattoos"]
+                                if sp["piercings"] is not None:
+                                    p["piercings"] = sp["piercings"]
+                                if sp["aliases"] is not None:
+                                    p["aliases"] = sp["aliases"]
+                                if sp["image"] is not None:
+                                    p["image"] = sp["image"]
+                if found:
+                    del p["image_path"]
+                    del p["checksum"]
+                    del p["scene_count"]
+                    self.info("updating performer "+p["name"])
+                    self.debug("===name: "+str(p["name"])+ " url: "+str(p["url"])+" gender "+str(p["gender"]))
+                    u=self.performer_update(p)
+                    if u is not None:
+                        self.info("update succesful!!")
+                        print(u)
 
 #scraper_preference=["Iafd","Babepedia","stash-sqlite","performer-image-dir"]
 
@@ -861,10 +918,15 @@ if __name__ == '__main__':
         elif sys.argv[1] == "performers":
             client= scrape_with(url)
             client.run_update_performers(scraper_preference)
+        elif sys.argv[1] == "runperformers":
+            print("zzzz")
+            client = scrape_with(url)
+            client.run_scraper_performers("performer-image-dir")
         elif sys.argv[1]== "api":
-            var=sys.stdin.read()
+            fragment = json.loads(sys.stdin.read())
+            print("input: " + json.dumps(fragment), file=sys.stderr)
 #            print("|"+var+"|")
-            fragment = json.loads(var)
+#            fragment = json.loads(var)
             scheme=fragment["server_connection"]["Scheme"]
             port=fragment["server_connection"]["Port"]
             domain="localhost"
@@ -876,11 +938,10 @@ if __name__ == '__main__':
 
             client=scrape_with(url)
             mode=fragment["args"]["mode"]
-
+            client.debug("Mode: "+mode)
             if mode == "setup":
                 client.setup_tags()
 
-            print ('{"output": "something"}')
 #            print(fragment)
 
 
