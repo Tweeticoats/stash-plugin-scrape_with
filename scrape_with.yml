@@ -1,0 +1,26 @@
+name: Scrape With
+description: Run fragment based scrapers on fragment based scrapers ie tag a scene with scrape_with_xbvr and start the action.
+version: 0.1
+url: https://github.com/tweeticoats/scrape-with-plugin
+exec:
+ - python
+ - "{pluginDir}/scrape_with.py"
+ - api
+interface: raw
+tasks:
+  - name: Setup tags
+    description: Create tags used by plugin, ie scrape_with_xbvr
+    defaultArgs:
+      mode: setup
+  - name: run fragment scrapers with tag
+    description: run scrapers on tagged scenes
+    defaultArgs:
+      mode: scrape_all
+  - name: run performer scrapers
+    description: Run performers scrapers on performers missing a url in the prefered order
+    defaultArgs:
+      mode: performers
+  - name: run performer image scraper on all performers
+    description: Runa"performer image" scrapers on all performers
+    defaultArgs:
+      mode: performers_imagedir

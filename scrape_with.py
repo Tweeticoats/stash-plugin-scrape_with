@@ -415,9 +415,9 @@ fragment PerformerData on Performer {
 
     def findPerformer(self, name):
         for performer in self.findPerformersByName(name):
-            print(performer["name"] + "-" + name)
+            self.debug("finding performer: "+name+ str(performer["name"]))
             if performer["name"].lower() == name.lower():
-                print("Found")
+                self.debug("Found performer")
                 return performer
             if "aliases" in performer:
                 if performer["aliases"] == name:
@@ -554,8 +554,8 @@ fragment PerformerData on Performer {
             if res is None:
                 self.info("scraper did not return a result")
             else:
-                self.debug("Scraper returned something " )
-                self.trace(res)
+                self.info("Scraper returned something " )
+#                self.trace("scraper result: " + str(res))
                 newscene={}
                 newscene["id"]=s["id"]
                 if "title" in res:
@@ -598,7 +598,7 @@ fragment PerformerData on Performer {
                         elif "name" in tag:
                             new_id=self.findTagIdWithName(tag["name"])
                             if new_id==None:
-                                print("creating tag: "+tag["name"])
+                                self.info("creating tag: "+tag["name"])
                                 new_id=self.createTagWithName(tag["name"])
                             new_tags.append(new_id)
                     newscene["tag_ids"]=new_tags
@@ -612,13 +612,14 @@ fragment PerformerData on Performer {
                             elif "name" in p:
                                 new_performer=self.findPerformer(p["name"])
                                 if new_performer==None:
-                                    print("Creating a new performer: "+ p["name"])
+                                    self.info("Creating a new performer: "+ p["name"])
                                     new_performer=self.createPerformer(p)
                                 performer_list.append(new_performer["id"])
                     newscene["performer_ids"]=performer_list
 
     #            print(res["performers"])
     #            print(newscene)
+                self.debug("Saving scene: "+str(newscene["title"]))
                 self.updateScene(newscene)
 
     def update_all_scenes_with_tags(self):
@@ -831,7 +832,6 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                     u=self.performer_update(p)
                     if u is not None:
                         self.info("update succesful!!")
-                        print(u)
     def run_scraper_performers(self,scraper):
         performers=self.allPerformers()
         index=0
@@ -891,7 +891,6 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                     u=self.performer_update(p)
                     if u is not None:
                         self.info("update succesful!!")
-                        print(u)
 
 #scraper_preference=["Iafd","Babepedia","stash-sqlite","performer-image-dir"]
 
@@ -919,12 +918,10 @@ if __name__ == '__main__':
             client= scrape_with(url)
             client.run_update_performers(scraper_preference)
         elif sys.argv[1] == "runperformers":
-            print("zzzz")
             client = scrape_with(url)
             client.run_scraper_performers("performer-image-dir")
         elif sys.argv[1]== "api":
             fragment = json.loads(sys.stdin.read())
-            print("input: " + json.dumps(fragment), file=sys.stderr)
 #            print("|"+var+"|")
 #            fragment = json.loads(var)
             scheme=fragment["server_connection"]["Scheme"]
@@ -941,6 +938,12 @@ if __name__ == '__main__':
             client.debug("Mode: "+mode)
             if mode == "setup":
                 client.setup_tags()
+            elif mode == "scrape_all":
+                client.update_all_scenes_with_tags()
+            elif mode == "performers":
+                client.run_update_performers(scraper_preference)
+            elif mode == "performers_imagedir":
+                client.run_scraper_performers("performer-image-dir")
 
 #            print(fragment)
 
