@@ -69,6 +69,18 @@ class scrape_with:
                 "GraphQL query failed:{} - {}. Query: {}. Variables: {}".format(response.status_code, response.content,
                                                                                 query, variables))
 
+    def listTags(self):
+            query = """
+    query {
+      allTags {
+        id
+        name
+      }
+    }"""
+
+            result = self.__callGraphQL(query)
+            return result["allTags"]
+
     def findTagIdWithName(self, name):
         query = """
 query {
@@ -85,6 +97,7 @@ query {
             if tag["name"] == name:
                 return tag["id"]
         return None
+
 
     def createTagWithName(self, name):
         query = """
@@ -522,8 +535,6 @@ fragment PerformerData on Performer {
 
         variables = {'input': new_performer}
 
-#        print(variables)
-
         result = self.__callGraphQL(query, variables)
         return result["performerCreate"]
 
@@ -555,7 +566,7 @@ fragment PerformerData on Performer {
                 self.info("scraper did not return a result")
             else:
                 self.info("Scraper returned something " )
-#                self.trace("scraper result: " + str(res))
+                self.trace("scraper result: " + str(res))
                 newscene={}
                 newscene["id"]=s["id"]
                 if "title" in res:
@@ -571,8 +582,10 @@ fragment PerformerData on Performer {
                 if "organized" in res:
                     newscene["organized"]=res["organized"]
                 if "studio" in res:
-                    if "stored_id" in res["studio"]:
-                        newscene["studio_id"]=res["studio"]["stored_id"]
+                    if res["studio"] is None:
+                        True
+                    elif "stored_id" in res["studio"]:
+                            newscene["studio_id"]=res["studio"]["stored_id"]
                     elif "name" in res["studio"]:
                         studio_id=self.findStudioIdWithName(res["studio"]["name"])
                         newscene["studio_id"]=studio_id
@@ -580,54 +593,49 @@ fragment PerformerData on Performer {
                     newscene["cover_image"]=res["image"]
                 if "tags" in res:
                     new_tags=[]
-                    for tag in res["tags"]:
-                        if "stored_id" in tag:
-                            if tag["stored_id"] is not None:
-        #                    tag["id"]=int(tag["stored_id"])
-        #                    del tag["stored_id"]
-        #                    tag["scene_count"]=None
-        #                    tag["scene_marker_count"]=None
-        #                    new_tags.append(tag)
-                               new_tags.append(tag["stored_id"])
+                    if res["tags"] is not None:
+                        for tag in res["tags"]:
+                            if "stored_id" in tag:
+                                if tag["stored_id"] is not None:
+                                   new_tags.append(tag["stored_id"])
+                                elif "name" in tag:
+                                    new_id = self.findTagIdWithName(tag["name"])
+                                    if new_id == None:
+                                        self.trace("creating tag: "+ tag["name"])
+                                        new_id = self.createTagWithName(tag["name"])
+                                    new_tags.append(new_id)
                             elif "name" in tag:
-                                new_id = self.findTagIdWithName(tag["name"])
-                                if new_id == None:
-                                    self.trace("creating tag: "+ tag["name"])
-                                    new_id = self.createTagWithName(tag["name"])
+                                new_id=self.findTagIdWithName(tag["name"])
+                                if new_id==None:
+                                    self.info("creating tag: "+tag["name"])
+                                    new_id=self.createTagWithName(tag["name"])
                                 new_tags.append(new_id)
-                        elif "name" in tag:
-                            new_id=self.findTagIdWithName(tag["name"])
-                            if new_id==None:
-                                self.info("creating tag: "+tag["name"])
-                                new_id=self.createTagWithName(tag["name"])
-                            new_tags.append(new_id)
                     newscene["tag_ids"]=new_tags
                 if "performers" in res:
-                    performer_list=[]
-                    for p in res["performers"]:
-                        print (p)
-                        if "stored_id" in p:
-                            if p["stored_id"] != None:
-                                performer_list.append(p["stored_id"])
-                            elif "name" in p:
-                                new_performer=self.findPerformer(p["name"])
-                                if new_performer==None:
-                                    self.info("Creating a new performer: "+ p["name"])
-                                    new_performer=self.createPerformer(p)
-                                performer_list.append(new_performer["id"])
-                    newscene["performer_ids"]=performer_list
-
-    #            print(res["performers"])
-    #            print(newscene)
+                    if res["performers"] is not None:
+                        self.debug(str(res["performers"]))
+                        performer_list=[]
+                        for p in res["performers"]:
+                            self.debug(str(p))
+                            if "stored_id" in p:
+                                if p["stored_id"] != None:
+                                    performer_list.append(p["stored_id"])
+                                elif "name" in p:
+                                    new_performer=self.findPerformer(p["name"])
+                                    if new_performer==None:
+                                        self.info("Creating a new performer: "+ p["name"])
+                                        new_performer=self.createPerformer(p)
+                                    performer_list.append(new_performer["id"])
+                        newscene["performer_ids"]=performer_list
                 self.debug("Saving scene: "+str(newscene["title"]))
                 self.updateScene(newscene)
 
     def update_all_scenes_with_tags(self):
-        scrapers=self.list_scrapers('FRAGMENT')
-        for s in scrapers:
-            tagName='scrape_with_'+s
-            self.info("scraping all scenes with tag: "+tagName)
-            self.update_with_tag(tagName)
+        tags=self.listTags()
+        for tag in tags:
+            if tag["name"].startswith("scrape_with_"):
+                self.info("scraping all scenes with tag: "+str(tag["name"]))
+                self.update_with_tag(tag["name"])
 
     def scrape_performer_list(self,scraper_id,performer):
         query="""query scrapePerformerList($scraper_id: ID!, $performer: String!) {
@@ -832,6 +840,7 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                     u=self.performer_update(p)
                     if u is not None:
                         self.info("update succesful!!")
+
     def run_scraper_performers(self,scraper):
         performers=self.allPerformers()
         index=0
@@ -893,7 +902,6 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                         self.info("update succesful!!")
 
 #scraper_preference=["Iafd","Babepedia","stash-sqlite","performer-image-dir"]
-
 scraper_preference=["Iafd","stash-sqlite","performer-image-dir"]
 
 
@@ -922,8 +930,6 @@ if __name__ == '__main__':
             client.run_scraper_performers("performer-image-dir")
         elif sys.argv[1]== "api":
             fragment = json.loads(sys.stdin.read())
-#            print("|"+var+"|")
-#            fragment = json.loads(var)
             scheme=fragment["server_connection"]["Scheme"]
             port=fragment["server_connection"]["Port"]
             domain="localhost"
@@ -944,29 +950,5 @@ if __name__ == '__main__':
                 client.run_update_performers(scraper_preference)
             elif mode == "performers_imagedir":
                 client.run_scraper_performers("performer-image-dir")
-
-#            print(fragment)
-
-
-    #        performers=client.allPerformers()
-   #         print(performers)
-   #         scrapers=client.listPerformerScrapers()
-    #        print(scrapers)
-
     else:
         print("")
-
-#    new_performer = client.findPerformer("Rose Winters")
-#    print(new_performer)
-#    new_performer = client.findPerformer(p["name"])
-#    if new_performer == None:
-#        np = client.createPerformer(""")
-#        print(np["id"])
-
-#    p=client.findPerformer("Samantha Rone")
-#    print(p)
-
-
-#    setup_tags()
-
-
