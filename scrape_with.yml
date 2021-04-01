@@ -3,7 +3,7 @@ description: Run fragment based scrapers on fragment based scrapers ie tag a sce
 version: 0.2
 url: https://github.com/tweeticoats/scrape-with-plugin
 exec:
- - python
+ - python3
  - "{pluginDir}/scrape_with.py"
  - api
 interface: raw
