@@ -185,7 +185,7 @@ mutation sceneUpdate($input:SceneUpdateInput!) {
     def get_scenes_with_tag(self, tag):
         tagID = self.findTagIdWithName(tag)
         query = """query findScenes($scene_filter: SceneFilterType!) {
-  findScenes(scene_filter: $scene_filter filter: {per_page: -1}) {
+  findScenes(scene_filter: $scene_filter filter: {per_page: 0}) {
     count
     scenes {
       id
@@ -564,9 +564,19 @@ fragment PerformerData on Performer {
             res=self.scrapeScene(scraper,s)
             if res is None:
                 self.info("scraper did not return a result")
+                newscene={}
+                newscene["id"]=s["id"]
+                new_tags=[]
+                new_id=self.findTagIdWithName("unscrapable")
+                if new_id==None:
+                    self.info("creating tag: unscrapable")
+                    new_id=self.createTagWithName("unscrapable")
+                new_tags.append(new_id)
+                newscene["tag_ids"]=new_tags
+                self.debug("Saving scene: "+str(s["title"]))
+                self.updateScene(newscene)
             else:
                 self.info("Scraper returned something " )
-                self.trace("scraper result: " + str(res))
                 newscene={}
                 newscene["id"]=s["id"]
                 if "title" in res:
