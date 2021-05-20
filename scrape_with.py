@@ -185,7 +185,7 @@ mutation sceneUpdate($input:SceneUpdateInput!) {
     def get_scenes_with_tag(self, tag):
         tagID = self.findTagIdWithName(tag)
         query = """query findScenes($scene_filter: SceneFilterType!) {
-  findScenes(scene_filter: $scene_filter filter: {per_page: 0}) {
+  findScenes(scene_filter: $scene_filter filter: {per_page: -1}) {
     count
     scenes {
       id
