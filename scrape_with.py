@@ -269,7 +269,7 @@ mutation sceneUpdate($input:SceneUpdateInput!) {
   }
 }"""
 
-        variables = {"scene_filter": {"tags": {"value": [tagID], "modifier": "INCLUDES"}}}
+        variables = {"scene_filter": {"tags": {"value": [tagID], "modifier": "INCLUDES","depth":1}}}
         result = self.__callGraphQL(query, variables)
         return result["findScenes"]["scenes"]
 
@@ -695,7 +695,11 @@ fragment PerformerData on Performer {
     tattoos
     piercings
     aliases
+    details
     image
+    death_date
+    hair_color
+    weight
     }
 }"""
         del performer["image"]
@@ -799,7 +803,8 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                     if scraped_list is not None:
                         self.debug("scraping "+p["name"]+" with scraper: "+scraper)
                         for s in scraped_list:
-                            if (s["name"]).lower()==(p["name"]).lower() and not found:
+
+                            if (not found) and ('name' in s) and (s["name"]).lower()==(p["name"]).lower():
                                 sp=self.scrape_performer(scraper,s)
                                 if sp is not None:
                                     if (sp["name"]).lower()==(p["name"]).lower():
@@ -839,6 +844,8 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                                             p["aliases"] = sp["aliases"]
                                         if sp["image"] is not None:
                                             p["image"] = sp["image"]
+                                        if sp["details"] is not None:
+                                            p["details"] = sp["details"]
                                 else:
                                     self.info("Looking up entry did not return a result entry: " +s["name"])
                 if found:
@@ -901,6 +908,13 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                                     p["aliases"] = sp["aliases"]
                                 if sp["image"] is not None:
                                     p["image"] = sp["image"]
+                                if sp["death_date"] is not None:
+                                    p["death_date"] = sp["death_date"]
+                                if sp["hair_color"] is not None:
+                                    p["hair_color"] = sp["hair_color"]
+                                if sp["weight"] is not None:
+                                    p["weight"] = sp["weight"]
+
                 if found:
                     del p["image_path"]
                     del p["checksum"]
@@ -911,8 +925,8 @@ mutation performerUpdate($input: PerformerUpdateInput!) {
                     if u is not None:
                         self.info("update succesful!!")
 
-#scraper_preference=["Iafd","Babepedia","stash-sqlite","performer-image-dir"]
-scraper_preference=["Iafd","stash-sqlite","performer-image-dir"]
+scraper_preference=["Babepedia","stash-sqlite","IAFD","ManyVids","Pornhub","SARJ LLC","ThePornDB","performer-image-dir"]
+#scraper_preference=["Iafd","stash-sqlite","performer-image-dir"]
 
 
 # Press the green button in the gutter to run the script.
@@ -958,7 +972,7 @@ if __name__ == '__main__':
                 client.update_all_scenes_with_tags()
             elif mode == "performers":
                 client.run_update_performers(scraper_preference)
-            elif mode == "performers_imagedir":
-                client.run_scraper_performers("performer-image-dir")
+            elif mode.startswith('performers_'):
+                client.run_scraper_performers(mode[11:])
     else:
         print("")
