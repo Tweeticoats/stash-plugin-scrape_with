@@ -164,7 +164,17 @@ mutation sceneUpdate($input:SceneUpdateInput!) {
 
         self.__callGraphQL(query, variables)
 
-    def list_scrapers(self, type):
+    def updateGallery(self, galleryData):
+        query = """mutation GalleryUpdate($input: GalleryUpdateInput!) {
+  galleryUpdate(input: $input) {
+    id
+  }
+}"""
+        variables = {'input': galleryData}
+
+        self.__callGraphQL(query, variables)
+
+    def list_scene_scrapers(self, type):
         query = """
         query listSceneScrapers {
   listSceneScrapers {
@@ -173,12 +183,36 @@ mutation sceneUpdate($input:SceneUpdateInput!) {
     scene{
       supported_scrapes
     }
+    gallery{
+      supported_scrapes
+    } 
   }
 }"""
         ret = []
         result = self.__callGraphQL(query)
         for r in result["listSceneScrapers"]:
             if type in r["scene"]["supported_scrapes"]:
+                ret.append(r["id"])
+        return ret
+
+    def list_gallery_scrapers(self, type):
+        query = """
+        query listGalleryScrapers {
+  listGalleryScrapers {
+    id
+    name
+    scene{
+      supported_scrapes
+    }
+    gallery{
+      supported_scrapes
+    }
+  }
+}"""
+        ret = []
+        result = self.__callGraphQL(query)
+        for r in result["listGalleryScrapers"]:
+            if type in r["gallery"]["supported_scrapes"]:
                 ret.append(r["id"])
         return ret
 
@@ -273,6 +307,65 @@ mutation sceneUpdate($input:SceneUpdateInput!) {
         result = self.__callGraphQL(query, variables)
         return result["findScenes"]["scenes"]
 
+    def get_galleries_with_tag(self, tag):
+        tagID = self.findTagIdWithName(tag)
+        query = """query findGalleries($galleries_filter: GalleryFilterType!) {
+  findGalleries(gallery_filter: $galleries_filter filter: {per_page: -1}) {
+    count
+    galleries {
+      id
+      checksum
+      path
+      title
+      url
+      date
+      details
+      rating
+      organized
+      created_at
+      updated_at
+      file_mod_time
+      scenes{
+        id
+        title
+      }
+      performers {
+        id
+        name
+        gender
+        url
+        twitter
+        instagram
+        birthdate
+        ethnicity
+        country
+        eye_color
+        country
+        height
+        measurements
+        fake_tits
+        career_length
+        tattoos
+        piercings
+        aliases
+      }
+      studio{
+        id
+        name
+        url
+        stash_ids{
+          endpoint
+          stash_id
+        }
+      }
+    }
+  }
+}"""
+
+        variables = {"galleries_filter": {"tags": {"value": [tagID], "modifier": "INCLUDES", "depth": 1}}}
+        result = self.__callGraphQL(query, variables)
+        return result["findGalleries"]["galleries"]
+
     def scrapeScene(self, scraper, scene):
         query = """query ScrapeScene($scraper_id: ID!, $scene: SceneUpdateInput!) {
   scrapeScene(scraper_id: $scraper_id, scene: $scene) {
@@ -352,15 +445,90 @@ mutation sceneUpdate($input:SceneUpdateInput!) {
         result = self.__callGraphQL(query, variables)
         return result["scrapeScene"]
 
+    def scrapeGallery(self, scraper,gallery_id):
+        query = """query ScrapeSingleGallery($source: ScraperSourceInput!, $input: ScrapeSingleGalleryInput!) {
+  scrapeSingleGallery(source: $source, input: $input) {
+    ...ScrapedGalleryData
+    __typename
+  }
+}
+
+fragment ScrapedGalleryData on ScrapedGallery {
+  title
+  details
+  url
+  date
+  studio {
+    ...ScrapedSceneStudioData
+    __typename
+  }
+  tags {
+    ...ScrapedSceneTagData
+    __typename
+  }
+  performers {
+    ...ScrapedScenePerformerData
+    __typename
+  }
+  __typename
+}
+
+fragment ScrapedSceneStudioData on ScrapedStudio {
+  stored_id
+  name
+  url
+  remote_site_id
+  __typename
+}
+
+fragment ScrapedSceneTagData on ScrapedTag {
+  stored_id
+  name
+  __typename
+}
+
+fragment ScrapedScenePerformerData on ScrapedPerformer {
+  stored_id
+  name
+  gender
+  url
+  twitter
+  instagram
+  birthdate
+  ethnicity
+  country
+  eye_color
+  height
+  measurements
+  fake_tits
+  career_length
+  tattoos
+  piercings
+  aliases
+  tags {
+    ...ScrapedSceneTagData
+    __typename
+  }
+  remote_site_id
+  images
+  details
+  death_date
+  hair_color
+  weight
+  __typename
+}"""
+
+        variables = {"input": {"gallery_id": gallery_id },"source": {"scraper_id": scraper}}
+        result = self.__callGraphQL(query, variables)
+        return result["scrapeSingleGallery"][0]
+
     def findStudioIdWithName(self, name):
-        query = """
-query {
+        query = """query {
   allStudios {
     id
     name
   }
-}
-        """
+}"""
         result = self.__callGraphQL(query)
 
         for tag in result["allStudios"]:
@@ -542,7 +710,7 @@ fragment PerformerData on Performer {
 
 
     def setup_tags(self):
-        scrapers=self.list_scrapers('FRAGMENT')
+        scrapers=self.list_scene_scrapers('FRAGMENT')
         for s in scrapers:
             tagName='scrape_with_'+s
             tagID = self.findTagIdWithName(tagName)
@@ -640,12 +808,110 @@ fragment PerformerData on Performer {
                 self.debug("Saving scene: "+str(newscene["title"]))
                 self.updateScene(newscene)
 
+    def update_gallery_with_tag(self,tag):
+
+        scenes=self.get_galleries_with_tag(tag)
+        #get rid of scrape_with_
+        scraper=tag[12:]
+        for s in scenes:
+
+            self.info("running scraper on gallery: "+s["id"])
+            res=self.scrapeGallery(scraper,s["id"])
+            if res["title"] is None:
+                self.info("gallery did not return a result")
+                newscene={}
+                newscene["id"]=s["id"]
+                new_tags=[]
+                new_id=self.findTagIdWithName("unscrapable")
+                if new_id==None:
+                    self.info("creating tag: unscrapable")
+                    new_id=self.createTagWithName("unscrapable")
+                new_tags.append(new_id)
+                newscene["tag_ids"]=new_tags
+                self.debug("Saving scene: "+str(s["title"]))
+                self.updateScene(newscene)
+            else:
+                self.info("Scraper returned something " )
+                newGallery={}
+                newGallery["id"]=s["id"]
+                if "title" in res:
+                    newGallery["title"]=res["title"]
+                if "details" in res:
+                    newGallery["details"]=res["details"]
+                if "url" in res:
+                    newGallery["url"]=res["url"]
+                if "date" in res:
+                    newGallery["date"]=res["date"]
+                if "rating" in res:
+                    newGallery["rating"]=res["rating"]
+                if "organized" in res:
+                    newGallery["organized"]=res["organized"]
+                if "studio" in res:
+                    if res["studio"] is None:
+                        True
+                    elif "stored_id" in res["studio"]:
+                            newGallery["studio_id"]=res["studio"]["stored_id"]
+                    elif "name" in res["studio"]:
+                        studio_id=self.findStudioIdWithName(res["studio"]["name"])
+                        newGallery["studio_id"]=studio_id
+                if "tags" in res:
+                    new_tags=[]
+                    if res["tags"] is not None:
+                        for tag in res["tags"]:
+                            if "stored_id" in tag:
+                                if tag["stored_id"] is not None:
+                                   new_tags.append(tag["stored_id"])
+                                elif "name" in tag:
+                                    new_id = self.findTagIdWithName(tag["name"])
+                                    if new_id == None:
+                                        self.trace("creating tag: "+ tag["name"])
+                                        new_id = self.createTagWithName(tag["name"])
+                                    new_tags.append(new_id)
+                            elif "name" in tag:
+                                new_id=self.findTagIdWithName(tag["name"])
+                                if new_id==None:
+                                    self.info("creating tag: "+tag["name"])
+                                    new_id=self.createTagWithName(tag["name"])
+                                new_tags.append(new_id)
+                    newGallery["tag_ids"]=new_tags
+                if "performers" in res:
+                    if res["performers"] is not None:
+                        self.debug(str(res["performers"]))
+                        performer_list=[]
+                        for p in res["performers"]:
+                            self.debug(str(p))
+                            if "stored_id" in p:
+                                if p["stored_id"] != None:
+                                    performer_list.append(p["stored_id"])
+                                elif "name" in p:
+                                    new_performer=self.findPerformer(p["name"])
+                                    if new_performer==None:
+                                        self.info("Creating a new performer: "+ p["name"])
+                                        new_performer=self.createPerformer(p)
+                                    performer_list.append(new_performer["id"])
+                        newGallery["performer_ids"]=performer_list
+                self.debug("Saving scene: "+str(newGallery["title"]))
+                self.updateGallery(newGallery)
+
+
     def update_all_scenes_with_tags(self):
         tags=self.listTags()
         for tag in tags:
             if tag["name"].startswith("scrape_with_"):
                 self.info("scraping all scenes with tag: "+str(tag["name"]))
-                self.update_with_tag(tag["name"])
+                scrapers = self.list_scene_scrapers('FRAGMENT')
+                if tag["name"][12:] in scrapers:
+                    self.update_with_tag(tag["name"])
+
+    def update_all_galleries_with_tags(self):
+        tags=self.listTags()
+        for tag in tags:
+            if tag["name"].startswith("scrape_with_"):
+                self.info("scraping all galleries with tag: "+str(tag["name"]))
+                scrapers = self.list_gallery_scrapers('FRAGMENT')
+                if tag["name"][12:] in scrapers:
+                    self.update_gallery_with_tag(tag["name"])
+
 
     def scrape_performer_list(self,scraper_id,performer):
         query="""query scrapePerformerList($scraper_id: ID!, $performer: String!) {
@@ -946,6 +1212,9 @@ if __name__ == '__main__':
         elif sys.argv[1] =="scrape_all":
             client = scrape_with(url)
             client.update_all_scenes_with_tags()
+        elif sys.argv[1] =="gallery_all":
+            client = scrape_with(url)
+            client.update_all_galleries_with_tags()
         elif sys.argv[1] == "performers":
             client= scrape_with(url)
             client.run_update_performers(scraper_preference)
