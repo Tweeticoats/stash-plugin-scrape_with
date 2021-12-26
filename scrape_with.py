@@ -1243,5 +1243,7 @@ if __name__ == '__main__':
                 client.run_update_performers(scraper_preference)
             elif mode.startswith('performers_'):
                 client.run_scraper_performers(mode[11:])
+            elif sys.argv[1] == "gallery_all":
+                client.update_all_galleries_with_tags()
     else:
         print("")
