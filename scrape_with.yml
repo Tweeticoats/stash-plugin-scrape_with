@@ -1,7 +1,7 @@
 name: Scrape With
 description: Run fragment based scrapers on fragment based scrapers ie tag a scene with scrape_with_xbvr and start the action.
 version: 0.4
-url: https://github.com/tweeticoats/scrape-with-plugin
+url: https://github.com/Tweeticoats/scrape-with-plugin
 exec:
  - python3
  - "{pluginDir}/scrape_with.py"
